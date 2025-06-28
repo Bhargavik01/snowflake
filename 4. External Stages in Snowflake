@@ -1,0 +1,159 @@
+In Snowflake, a stage is a location where data files are stored (i.e., staged) before being loaded into a table using the COPY INTO command.
+
+🔹 What is a Stage?
+A stage is a pointer to a location that holds data files (e.g., .csv, .json, .parquet).
+These files can live inside Snowflake or in external cloud storage like AWS S3, Azure Blob, or Google Cloud Storage.
+Think of a stage as a “loading dock” for your data.
+
+Types of Stages
+1. Internal Stages (Stored inside Snowflake)
+Internal stages store files within Snowflake’s cloud account (AWS, Azure, or GCP, depending on your Snowflake region).
+No additional cloud credentials required.
+- User Stage	Automatically created for each user. Accessible via @~
+- Table Stage	Associated with a specific table. Use @%table_name
+- Named Stage	Created explicitly. Reusable across tables or users
+
+
+2. External Stages (Stored outside Snowflake)
+External stages reference cloud locations like: Amazon S3, Google Cloud Storage, Azure Blob Storage
+They are created using the CREATE STAGE command and live as database objects under a schema.
+
+External stages store:
+- The URL/path to the cloud location
+- Optional credentials or access settings
+- Optional file format settings (CSV, JSON, etc.)
+
+-- ======================================
+-- 1. CREATE DATABASE AND SCHEMA
+-- ======================================
+
+-- Create a new database if it doesn't already exist
+CREATE DATABASE IF NOT EXISTS MYDB;
+
+-- Create a schema called "external_stages" to organize external stage objects
+CREATE SCHEMA IF NOT EXISTS external_stages;
+
+
+-- ======================================
+-- 2. CREATE AN EXTERNAL STAGE (S3 STAGING AREA)
+-- ======================================
+
+-- Create an external stage pointing to a public S3 bucket.
+-- This is used to load data from external cloud storage (S3 in this case).
+CREATE OR REPLACE STAGE MYDB.external_stages.sample_stage
+    URL='s3://bucketsnowflakes3';
+
+-- View metadata details of the stage (e.g., URL, credentials, file format)
+DESC STAGE MYDB.external_stages.sample_stage;
+
+-- List all files available in the S3 stage
+LIST @external_stages.sample_stage;
+
+
+-- ======================================
+-- 3. CREATE TARGET TABLE TO LOAD DATA INTO
+-- ======================================
+
+-- Create a table to store order-related data
+CREATE OR REPLACE TABLE MYDB.PUBLIC.ORDERS (
+    ORDER_ID VARCHAR(30),
+    AMOUNT INT,
+    PROFIT INT,
+    QUANTITY INT,
+    CATEGORY VARCHAR(30),
+    SUBCATEGORY VARCHAR(30)
+);
+
+-- View data in the ORDERS table (should be empty initially)
+SELECT * FROM MYDB.PUBLIC.ORDERS;
+
+
+-- ======================================
+-- 4. LOAD DATA USING COPY COMMAND
+-- ======================================
+
+-- Load data from a specific CSV file in the stage
+-- Header row is skipped and comma is used as delimiter
+COPY INTO MYDB.PUBLIC.ORDERS
+    FROM @MYDB.external_stages.sample_stage
+    FILE_FORMAT = (TYPE = CSV, FIELD_DELIMITER = ',' SKIP_HEADER = 1)
+    FILES = ('OrderDetails.csv');
+
+-- Verify data load
+SELECT * FROM MYDB.PUBLIC.ORDERS;
+
+
+-- Load data using a pattern that matches file names (e.g., all files containing 'Order')
+COPY INTO MYDB.PUBLIC.ORDERS
+    FROM @MYDB.external_stages.sample_stage
+    FILE_FORMAT = (TYPE = CSV, FIELD_DELIMITER = ',' SKIP_HEADER = 1)
+    PATTERN = '.*Order.*';
+
+-- Verify updated data
+SELECT * FROM MYDB.PUBLIC.ORDERS;
+
+
+-- ======================================
+-- 5. CREATE FILE FORMAT OBJECTS
+-- ======================================
+
+-- Create a schema to manage file format definitions
+CREATE SCHEMA IF NOT EXISTS MYDB.file_formats;
+
+-- Create a reusable file format object for CSV files
+CREATE FILE FORMAT MYDB.file_formats.csv_file_format;
+
+-- View properties of the created file format
+DESC FILE FORMAT MYDB.file_formats.csv_file_format;
+
+
+-- ======================================
+-- 6. CREATE ANOTHER TABLE FOR DEMO PURPOSES
+-- ======================================
+
+-- This table will demonstrate loading using the file format object
+CREATE OR REPLACE TABLE MYDB.PUBLIC.ORDERS_EX (
+    ORDER_ID VARCHAR(30),
+    AMOUNT INT,
+    PROFIT INT,
+    QUANTITY INT,
+    CATEGORY VARCHAR(30),
+    SUBCATEGORY VARCHAR(30)
+);
+
+
+-- ======================================
+-- 7. LOAD DATA USING FILE FORMAT OBJECT
+-- ======================================
+
+-- Load data into ORDERS_EX using the defined file format object
+COPY INTO MYDB.PUBLIC.ORDERS_EX
+    FROM @MYDB.external_stages.sample_stage
+    FILE_FORMAT = (FORMAT_NAME = MYDB.file_formats.csv_file_format)
+    FILES = ('OrderDetails.csv');
+
+
+-- ======================================
+-- 8. ALTER FILE FORMAT (e.g., to skip header row)
+-- ======================================
+
+-- Modify the existing file format to skip the first header row
+ALTER FILE FORMAT MYDB.file_formats.csv_file_format
+    SET SKIP_HEADER = 1;
+
+-- Confirm the updated properties
+DESC FILE FORMAT MYDB.file_formats.csv_file_format;
+
+
+-- ======================================
+-- 9. LOAD DATA AGAIN USING UPDATED FILE FORMAT
+-- ======================================
+
+-- Re-run COPY INTO using the modified file format that skips headers
+COPY INTO MYDB.PUBLIC.ORDERS_EX
+    FROM @MYDB.external_stages.sample_stage
+    FILE_FORMAT = (FORMAT_NAME = MYDB.file_formats.csv_file_format)
+    FILES = ('OrderDetails.csv');
+
+-- Final data check
+SELECT * FROM MYDB.PUBLIC.ORDERS_EX;
