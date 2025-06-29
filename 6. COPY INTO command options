@@ -1,0 +1,152 @@
+📥 Snowflake COPY INTO Command Options
+
+The COPY INTO command in Snowflake is used to load data from a stage into a table. It supports a variety of options that allow fine-grained control over validation, error handling, performance, and data loading behavior.
+
+🔧 Common COPY Options
+
+| Option               | Default            | Description                                         |
+|----------------------|--------------------|-----------------------------------------------------|
+| VALIDATION_MODE      | (None)             | Validate files before loading (no data is loaded)  |
+| RETURN_FAILED_ONLY   | FALSE              | Return only files that failed loading              |
+| ON_ERROR             | ABORT_STATEMENT    | Error-handling strategy (skip, continue, etc.)     |
+| FORCE                | FALSE              | Reload previously loaded files                     |
+| SIZE_LIMIT           | Unlimited          | Limit data size (in bytes) for this load           |
+| TRUNCATECOLUMNS      | FALSE              | Truncate strings that exceed column length         |
+| ENFORCE_LENGTH       | FALSE              | Reject rows if strings exceed column length        |
+| PURGE                | FALSE              | Delete files from stage after loading (external)   |
+| LOAD_UNCERTAIN_FILES | FALSE              | Load files with unknown status (older than 64 days)|
+
+
+------------------------------------------------------------------------------------------------------------------
+
+✅ VALIDATION_MODE
+
+Use this option to validate files before loading into the table.
+ VALIDATION_MODE Options
+| Value             | Description                                                  |
+|-------------------|--------------------------------------------------------------|
+| RETURN_ERRORS     | Return limited set of error rows                             |
+| RETURN_ALL_ERRORS | Return all errors (useful after ON_ERROR=CONTINUE runs)      |
+| RETURN_N_ROWS     | Show first N valid rows, stops at first error row            |
+-----------------------------------------------------------------------------------|
+
+COPY INTO <table_name>
+FROM @ExternalStage
+FILES = ('file1.csv', 'file2.csv')
+FILE_FORMAT = <file_format_name>
+VALIDATION_MODE = RETURN_N_ROWS | RETURN_ERRORS | RETURN_ALL_ERRORS;
+RETURN_ERRORS: Shows limited number of errors.
+RETURN_ALL_ERRORS: Returns all errors (especially useful with ON_ERROR = CONTINUE).
+RETURN_N_ROWS: Returns first N valid rows up to the first error.
+✅ Helpful for testing file integrity before actual data ingestion.
+------------------------------------------------------------------------------------------------------------------
+✅ RETURN_FAILED_ONLY
+
+Show only failed file results during load.
+
+COPY INTO <table_name>
+FROM @ExternalStage
+FILES = ('file1.csv', 'file2.csv')
+FILE_FORMAT = <file_format_name>
+RETURN_FAILED_ONLY = TRUE;
+TRUE: Show only failed file statuses.
+FALSE (default): Show all statuses.
+
+------------------------------------------------------------------------------------------------------------------
+
+✅ ON_ERROR
+Controls what happens when an error occurs during data loading.
+
+COPY INTO <table_name>
+FROM @ExternalStage
+FILES = ('file1.csv')
+FILE_FORMAT = <file_format_name>
+ON_ERROR = CONTINUE | SKIP_FILE | SKIP_FILE_<n> | SKIP_FILE_<n>% | ABORT_STATEMENT;
+
+⚠️ ON_ERROR Options
+| Value              | Description                                                  |
+|--------------------|--------------------------------------------------------------|
+| CONTINUE           | Skip bad rows and continue loading remaining data            |
+| SKIP_FILE          | Skip entire file if any row has errors                       |
+| SKIP_FILE_<n>      | Skip file if >n error rows found                             |
+| SKIP_FILE_<n>%     | Skip file if >n% error rows                                  |
+| ABORT_STATEMENT    | Default. Stop load at first error                            |
+-------------------------------------------------------------------------------------
+
+
+------------------------------------------------------------------------------------------------------------------
+
+✅ FORCE
+
+Forces Snowflake to reload files even if they’ve already been marked as loaded.
+
+COPY INTO <table_name>
+FROM @ExternalStage
+FILES = ('file1.csv')
+FILE_FORMAT = <file_format_name>
+FORCE = TRUE;
+TRUE: Load files again regardless of previous status.
+FALSE (default): Skip previously loaded files.
+------------------------------------------------------------------------------------------------------------------
+
+✅ SIZE_LIMIT
+
+Stops the load when a specified number of bytes is reached.
+
+COPY INTO <table_name>
+FROM @ExternalStage
+FILES = ('file1.csv')
+FILE_FORMAT = <file_format_name>
+SIZE_LIMIT = <number_in_bytes>;
+Useful to restrict large loads.
+Load stops once this threshold is reached.
+
+------------------------------------------------------------------------------------------------------------------
+✅ TRUNCATECOLUMNS or ENFORCE_LENGTH
+
+Allows handling of string data that exceeds column lengths.
+
+-- Option 1
+COPY INTO <table_name>
+FROM @ExternalStage
+FILE_FORMAT = <file_format_name>
+TRUNCATECOLUMNS = TRUE;
+
+-- Option 2
+COPY INTO <table_name>
+FROM @ExternalStage
+FILE_FORMAT = <file_format_name>
+ENFORCE_LENGTH = TRUE;
+Option	Behavior
+TRUNCATECOLUMNS = TRUE	Truncates strings to column length
+ENFORCE_LENGTH = TRUE	Rejects rows exceeding column length
+
+------------------------------------------------------------------------------------------------------------------
+✅ PURGE
+
+Deletes files from the stage after a successful load (used with external stages only).
+
+COPY INTO <table_name>
+FROM @ExternalStage
+FILE_FORMAT = <file_format_name>
+PURGE = TRUE;
+TRUE: Automatically removes files from stage after loading.
+FALSE (default): Retains files in stage.
+
+------------------------------------------------------------------------------------------------------------------
+✅ LOAD_UNCERTAIN_FILES
+
+Loads files whose load status is marked as unknown (e.g., due to file age or history expiry).
+
+COPY INTO <table_name>
+FROM @ExternalStage
+FILE_FORMAT = <file_format_name>
+LOAD_UNCERTAIN_FILES = TRUE;
+By default, Snowflake skips these files. Load status becomes unknown when:
+
+The file was last modified more than 64 days ago.
+Initial load to the same table occurred over 64 days ago.
+Load history metadata has expired.
+📌 Summary Table
+
+
