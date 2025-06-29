@@ -1,0 +1,83 @@
+📦 Snowflake Internal Stages:
+Snowflake provides internal stages as managed cloud storage to help you stage data files before loading them into tables. 
+Internal stages are fully managed by Snowflake and are available across AWS, Azure, or GCP depending on your Snowflake account.
+
+✅ Types of Internal Stages
+                      ┌────────────────────┐
+                      │   Internal Stage   │
+                      └────────┬───────────┘
+                               │
+        ┌──────────────────────┼──────────────────────┐
+        ▼                      ▼                      ▼
+┌───────────────┐     ┌────────────────┐     ┌──────────────────────┐
+│  User Stage   │     │  Table Stage   │     │   Named Stage        │
+│   (@~)        │     │   (@%table)    │     │   (@stage_name)      │
+├───────────────┤     ├────────────────┤     ├──────────────────────┤
+│ Per user      │     │ Per table      │     │ Explicitly created   │
+│ Private files │     │ Auto-created   │     │ Reusable             │
+│ Not shareable │     │ Load-only into │     │ Used across users    │
+│               │     │ that table     │     │ and tables           │
+└───────────────┘     └────────────────┘     └──────────────────────┘
+
+
+1. User Stage (@~)
+Each user is automatically assigned a stage.
+Best for temporary personal staging of files.
+Files in this stage cannot be shared with other users.
+Cannot be altered or dropped.
+
+-- Upload file to user stage
+PUT file://C:\Users\janar\OneDrive\Documents\Files\pets_data.json @~/staged;
+
+-- List files in user stage
+LIST @~/staged;
+
+2. Table Stage (@%<table_name>)
+Implicit stage tied to each table.
+Used to stage files that will be loaded into that specific table.
+Cannot be altered or dropped.
+Not a separate database object.
+
+-- Create a table
+CREATE OR REPLACE TABLE mydb.public.customer_data_table (
+  customerid NUMBER,
+  custname STRING,
+  email STRING,
+  city STRING,
+  state STRING,
+  DOB DATE
+);
+
+-- Upload file to the table's stage
+PUT file://C:\Users\janar\OneDrive\Documents\Files\customer_data_table.csv @%customer_data_table;
+
+-- List files in table stage
+LIST @%customer_data_table;
+
+
+3. Named Stage (@<stage_name>)
+Explicitly created using CREATE STAGE.
+Usable by multiple users and tables.
+Managed like any other database object.
+Can be used similarly to external stages (but stored internally).
+
+-- Create named internal stages
+CREATE OR REPLACE STAGE mydb.internal_stages.named_customer_stage;
+CREATE OR REPLACE STAGE mydb.internal_stages.named_orders_stage;
+CREATE OR REPLACE STAGE mydb.internal_stages.named_product_stage;
+
+-- Show all named stages in a schema
+SHOW STAGES IN mydb.internal_stages;
+
+-- Upload file to a named stage
+PUT file://C:\path\to\file.csv @mydb.internal_stages.named_customer_stage;
+
+-- List files in named stage
+LIST @mydb.internal_stages.named_customer_stage;
+
+Notes: 
+PUT works only from SnowSQL or Snowflake Web UI, not from the worksheet editor alone.
+Use internal stages for secure, fast staging when you're not using external cloud storage like S3, GCS, or Azure Blob.
+
+
+
